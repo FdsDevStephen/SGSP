@@ -1,0 +1,13 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Call data
+sgsp_logs/
+sgsp_data/
+*.log
+
+# Docker image exports
+dist/

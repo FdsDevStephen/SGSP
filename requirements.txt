@@ -1,0 +1,14 @@
+# SGSP voice agent
+fastapi
+uvicorn[standard]
+python-multipart
+google-genai
+python-dotenv
+numpy
+audiotsm
+openpyxl
+requests
+audioop-lts; python_version >= "3.13"
+
+# Local testing only (test_sgsp_call.py) — not installed in the Docker image
+# pip install -r requirements-dev.txt

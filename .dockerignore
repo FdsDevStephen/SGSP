@@ -1,0 +1,7 @@
+# Only the app and its requirements go into the image — never .env, venvs or call data.
+*
+!sgsp/
+!requirements.txt
+sgsp/test/
+sgsp/**/__pycache__/
+sgsp/**/*.pyc

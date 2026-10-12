@@ -1,0 +1,19 @@
+# SGSP voice agent only:  docker compose up -d --build
+services:
+  sgsp:
+    build:
+      context: .
+    image: sgsp-agent
+    container_name: sgsp-agent
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    env_file:
+      - .env
+    volumes:
+      - sgsp_logs:/app/sgsp_logs
+      - sgsp_data:/app/sgsp_data
+
+volumes:
+  sgsp_logs:
+  sgsp_data:

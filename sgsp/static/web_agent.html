@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGSP Call Tester</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5f6673; --border: #e2e5ea;
+    --accent: #1f5fbf; --accent-text: #ffffff; --danger: #b42318;
+    --user-bubble: #e8effa; --agent-bubble: #f1f2f4; --ok: #117a3d; --ok-bg: #e7f5ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a20; --text: #e8eaee; --muted: #9aa1ad; --border: #2a2f38;
+      --accent: #5b93e8; --accent-text: #0f1115; --danger: #f97066;
+      --user-bubble: #1d2a3f; --agent-bubble: #22262e; --ok: #5fd08d; --ok-bg: #16281e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Kannada", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card);
+         color: var(--text); cursor: pointer; font: inherit; }
+  .tab[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;
+                   padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary.stop { background: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .pill { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .pill.live { color: var(--ok); border-color: var(--ok); }
+  .meter { flex: 1; min-width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width 60ms linear; }
+  #log { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+  .msg { padding: 8px 12px; border-radius: 10px; max-width: 85%; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--user-bubble); }
+  .msg.agent { align-self: flex-start; background: var(--agent-bubble); }
+  .msg .who { display: block; font-size: 12px; color: var(--muted); }
+  .result { margin-top: 16px; padding: 14px; border-radius: 10px; background: var(--ok-bg); color: var(--ok); }
+  .result code { font-size: 18px; font-weight: 700; letter-spacing: .04em; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  input[type=tel], input[type=text], input[type=password], select { flex: 1; min-width: 180px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+                    background: var(--bg); color: var(--text); font: inherit; }
+  .error { color: var(--danger); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SGSP Call Tester · ವೇತನ ಪ್ಯಾಕೇಜ್ ಧ್ವನಿ ಸಹಾಯಕ</h1>
+  <p class="sub">Play the employee and hear the salary-package call. It speaks Kannada first; say “English” to switch.
+    <a href="/sgsp/dashboard">Campaign dashboard →</a></p>
+
+  <section class="card" style="margin-bottom:16px">
+    <div class="row">
+      <input type="text" id="empName" placeholder="Employee name (empty = inbound call, no name check)" maxlength="80">
+      <select id="empGender" title="Used for ಸರ್ / ಮೇಡಂ">
+        <option value="">Gender: not given</option><option value="male">Male (ಸರ್)</option><option value="female">Female (ಮೇಡಂ)</option>
+      </select>
+      <input type="password" id="adminToken" placeholder="Admin token (if set)" autocomplete="off">
+    </div>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-web" aria-selected="true">Talk here (browser)</button>
+    <button class="tab" role="tab" id="tab-phone" aria-selected="false">Call me on my phone</button>
+  </div>
+
+  <section class="card" id="panel-web">
+    <div class="row">
+      <button class="primary" id="startBtn">Start talking</button>
+      <span class="pill" id="status">Not connected</span>
+      <div class="meter" title="Microphone level"><div id="level"></div></div>
+    </div>
+    <div id="log" aria-live="polite"></div>
+    <div class="result" id="result" hidden></div>
+    <p class="note">The agent calls you by the name above. Allow microphone access when the browser asks.</p>
+  </section>
+
+  <section class="card" id="panel-phone" hidden>
+    <form class="row" id="callForm">
+      <input type="tel" id="phone" placeholder="10-digit mobile number" inputmode="numeric" maxlength="14" required>
+      <button class="primary" type="submit" id="callBtn">Call me</button>
+    </form>
+    <p class="note" id="callMsg">The assistant will call this number within a few seconds.</p>
+  </section>
+</main>
+
+<script>
+const IN_RATE = 16000, OUT_RATE = 24000;
+
+// ── Tabs ────────────────────────────────────────────────────────────────────
+const tabs = { web: document.getElementById("tab-web"), phone: document.getElementById("tab-phone") };
+const panels = { web: document.getElementById("panel-web"), phone: document.getElementById("panel-phone") };
+for (const [key, tab] of Object.entries(tabs)) {
+  tab.addEventListener("click", () => {
+    for (const k of Object.keys(tabs)) {
+      tabs[k].setAttribute("aria-selected", String(k === key));
+      panels[k].hidden = k !== key;
+    }
+  });
+}
+
+// ── Phone: request an outbound call ─────────────────────────────────────────
+document.getElementById("callForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("callMsg"), btn = document.getElementById("callBtn");
+  btn.disabled = true; msg.className = "note"; msg.textContent = "Requesting call…";
+  try {
+    const name = document.getElementById("empName").value.trim();
+    if (!name) throw new Error("enter the employee name first");
+    const res = await fetch("/sgsp/call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": document.getElementById("adminToken").value },
+      body: JSON.stringify({ phone: document.getElementById("phone").value, name,
+                             gender: document.getElementById("empGender").value || null }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || res.statusText);
+    msg.textContent = body.status === "dialing"
+      ? `Calling ${body.phone} now — please answer your phone.`
+      : `Queued for ${body.phone} (${body.message || body.status}).`;
+  } catch (err) {
+    msg.className = "note error"; msg.textContent = `Could not place the call: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── Web: live voice session ─────────────────────────────────────────────────
+// Mic → AudioWorklet (downsample to 16 kHz PCM16, 20 ms frames) → WebSocket (binary)
+// WebSocket binary (24 kHz PCM16) → scheduled AudioBufferSources
+const WORKLET = `
+class PcmCapture extends AudioWorkletProcessor {
+  constructor() { super(); this.ratio = sampleRate / ${IN_RATE}; this.pos = 0; this.acc = 0; this.cnt = 0;
+                  this.out = new Int16Array(${IN_RATE / 50}); this.n = 0; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this.acc += ch[i]; this.cnt++; this.pos += 1;
+      if (this.pos >= this.ratio) {
+        this.pos -= this.ratio;
+        const v = Math.max(-1, Math.min(1, this.acc / this.cnt));
+        this.acc = 0; this.cnt = 0;
+        this.out[this.n++] = v < 0 ? v * 0x8000 : v * 0x7fff;
+        if (this.n === this.out.length) { this.port.postMessage(this.out.buffer.slice(0)); this.n = 0; }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("pcm-capture", PcmCapture);`;
+
+const startBtn = document.getElementById("startBtn");
+const statusEl = document.getElementById("status");
+const levelEl = document.getElementById("level");
+const logEl = document.getElementById("log");
+const resultEl = document.getElementById("result");
+
+let ws = null, ctx = null, stream = null, analyser = null, rafId = 0;
+let nextTime = 0, sources = new Set(), running = false;
+let bubbles = { user: null, agent: null };
+
+const STATE_LABELS = { idle: "Your turn", listening: "Listening…", generating: "Thinking…", speaking: "Assistant speaking" };
+
+function setStatus(text, live) { statusEl.textContent = text; statusEl.classList.toggle("live", !!live); }
+
+function addText(role, text) {
+  if (!bubbles[role]) {
+    const el = document.createElement("div");
+    el.className = `msg ${role}`;
+    el.innerHTML = `<span class="who">${role === "user" ? "You" : "Assistant"}</span>`;
+    el.appendChild(document.createTextNode(""));
+    logEl.appendChild(el);
+    bubbles[role] = el;
+  }
+  bubbles[role].lastChild.textContent += text;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function playPcm(buf) {
+  const i16 = new Int16Array(buf);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+  const ab = ctx.createBuffer(1, f32.length, OUT_RATE);
+  ab.copyToChannel(f32, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = ab; src.connect(ctx.destination);
+  const t = Math.max(ctx.currentTime + 0.05, nextTime);
+  src.start(t); nextTime = t + ab.duration;
+  sources.add(src); src.onended = () => sources.delete(src);
+}
+
+function clearPlayback() {
+  for (const s of sources) { try { s.stop(); } catch {} }
+  sources.clear(); nextTime = 0;
+}
+
+function showResult(ev) {
+  resultEl.hidden = false;
+  resultEl.innerHTML = `Outcome recorded:<br><code></code><br><small></small>`;
+  resultEl.querySelector("code").textContent = ev.outcome;
+  resultEl.querySelector("small").textContent = Object.entries(ev.details || {})
+    .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ");
+}
+
+function meterLoop() {
+  const data = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (const v of data) { const d = (v - 128) / 128; sum += d * d; }
+    levelEl.style.width = `${Math.min(100, Math.sqrt(sum / data.length) * 400)}%`;
+    rafId = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+async function start() {
+  startBtn.disabled = true;
+  logEl.innerHTML = ""; resultEl.hidden = true; bubbles = { user: null, agent: null };
+  setStatus("Connecting…");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    ctx = new AudioContext();
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+    const source = ctx.createMediaStreamSource(stream);
+    const capture = new AudioWorkletNode(ctx, "pcm-capture");
+    const mute = ctx.createGain(); mute.gain.value = 0;   // keeps the worklet pulled by the graph
+    analyser = ctx.createAnalyser(); analyser.fftSize = 512;
+    source.connect(capture); capture.connect(mute); mute.connect(ctx.destination);
+    source.connect(analyser);
+    meterLoop();
+
+    const qs = new URLSearchParams({ name: document.getElementById("empName").value.trim(),
+                                     gender: document.getElementById("empGender").value,
+                                     token: document.getElementById("adminToken").value });
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/sgsp/web/stream?${qs}`);
+    ws.binaryType = "arraybuffer";
+    capture.port.onmessage = (e) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data); };
+
+    ws.onopen = () => { running = true; startBtn.textContent = "End"; startBtn.classList.add("stop"); startBtn.disabled = false; };
+    ws.onmessage = (e) => {
+      if (typeof e.data !== "string") { playPcm(e.data); return; }
+      const ev = JSON.parse(e.data);
+      switch (ev.type) {
+        case "ready": setStatus("Connected", true); break;
+        case "state": setStatus(STATE_LABELS[ev.state] || ev.state, true); break;
+        case "transcript": addText(ev.role, ev.text); break;
+        case "turn_complete": bubbles = { user: null, agent: null }; break;
+        case "clear": clearPlayback(); bubbles.agent = null; break;
+        case "outcome": showResult(ev); break;
+        case "error": setStatus(ev.message || "Error"); break;
+        case "end": break;  // socket close follows; queued audio keeps playing
+      }
+    };
+    ws.onclose = () => finish(false);
+    ws.onerror = () => setStatus("Connection error");
+  } catch (err) {
+    setStatus(err.name === "NotAllowedError" ? "Microphone permission denied" : `Error: ${err.message}`);
+    teardown();
+  }
+}
+
+// Stop capturing immediately; let already-scheduled assistant audio finish unless the tester hung up.
+function finish(userHungUp) {
+  if (!running && !ws) return;
+  running = false;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    if (userHungUp) ws.send(JSON.stringify({ type: "stop" }));
+    ws.close();
+  }
+  ws = null;
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = null;
+  if (userHungUp) clearPlayback();
+  const remaining = ctx ? Math.max(0, nextTime - ctx.currentTime) : 0;
+  setTimeout(teardown, remaining * 1000 + 300);
+  setStatus("Ended");
+}
+
+function teardown() {
+  cancelAnimationFrame(rafId); levelEl.style.width = "0";
+  if (ctx) { ctx.close(); ctx = null; }
+  nextTime = 0; sources.clear();
+  startBtn.textContent = "Start talking"; startBtn.classList.remove("stop"); startBtn.disabled = false;
+}
+
+startBtn.addEventListener("click", () => (running ? finish(true) : start()));
+</script>
+</body>
+</html>

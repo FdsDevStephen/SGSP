@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGSP Call Campaigns</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5f6673; --border: #e2e5ea;
+    --accent: #1f5fbf; --accent-text: #ffffff; --danger: #b42318; --ok: #117a3d; --warn: #9a6700;
+    --bar-bg: #e2e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a20; --text: #e8eaee; --muted: #9aa1ad; --border: #2a2f38;
+      --accent: #5b93e8; --accent-text: #0f1115; --danger: #f97066; --ok: #5fd08d; --warn: #e3b341;
+      --bar-bg: #2a2f38;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Kannada", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  input, button { font: inherit; }
+  input[type=text], input[type=password] { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+                                          background: var(--bg); color: var(--text); min-width: 200px; }
+  button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card);
+           color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border: 0; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; background: var(--bar-bg); border-radius: 3px; overflow: hidden; min-width: 100px; margin-top: 4px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
+  .chip.good { color: var(--ok); border-color: var(--ok); }
+  .chip.bad { color: var(--danger); border-color: var(--danger); }
+  .msg { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .msg.error { color: var(--danger); }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+  .pill.active { color: var(--ok); border-color: var(--ok); }
+  .pill.paused { color: var(--warn); border-color: var(--warn); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SGSP Call Campaigns · ವೇತನ ಪ್ಯಾಕೇಜ್ ಕರೆ ಅಭಿಯಾನ</h1>
+  <p class="sub">Upload the HRMS list of unregistered employees, then follow progress and download the report.
+    <a href="/sgsp/web">Test the call in the browser →</a></p>
+
+  <section class="card">
+    <div class="row">
+      <input type="password" id="token" placeholder="Admin token (if the server has one)" autocomplete="off">
+      <span class="msg" id="live" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>New campaign</h2>
+    <form class="row" id="uploadForm">
+      <input type="text" id="campName" placeholder="Campaign name, e.g. Group C – Mysuru" required>
+      <input type="file" id="campFile" accept=".xlsx,.csv" required>
+      <label class="row" style="gap:4px"><input type="checkbox" id="startPaused"> start paused</label>
+      <button class="primary" type="submit" id="uploadBtn">Upload &amp; start</button>
+    </form>
+    <p class="msg" id="uploadMsg">Columns (first row): <b>phone</b> (or mobile) and <b>name</b> are required;
+      <b>employee_id</b> (or KGID) and <b>gender</b> are optional. Calls run only inside calling hours.</p>
+  </section>
+
+  <section class="card">
+    <h2>Campaigns</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Name</th><th>State</th><th>Progress</th><th>Outcomes</th><th>Cost</th><th></th>
+        </tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="msg">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const tokenEl = document.getElementById("token");
+try { tokenEl.value = sessionStorage.getItem("sgspToken") || ""; } catch {}
+tokenEl.addEventListener("change", () => { try { sessionStorage.setItem("sgspToken", tokenEl.value); } catch {} refresh(); });
+
+const GOOD = new Set(["will_visit", "already_enrolled"]);
+const BAD = new Set(["declined", "do_not_call", "wrong_person"]);
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), "X-Admin-Token": tokenEl.value } });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res;
+}
+
+function el(tag, attrs = {}, text) {
+  const e = document.createElement(tag);
+  Object.assign(e, attrs);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderRow(c) {
+  const tr = el("tr");
+  const s = c.byStatus || {};
+  const finished = (s.done || 0) + (s.failed || 0) + (s.skipped || 0);
+  const pct = c.total ? Math.round(100 * finished / c.total) : 0;
+
+  tr.append(el("td", { className: "num" }, c.id));
+  const name = el("td"); name.append(el("div", {}, c.name), el("div", { className: "msg", style: "margin:0" },
+    `${c.total} employees${c.rejected ? ` · ${c.rejected} rows rejected` : ""}`));
+  tr.append(name);
+
+  const stateTd = el("td"); stateTd.append(el("span", { className: `pill ${c.state}` }, c.state)); tr.append(stateTd);
+
+  const prog = el("td");
+  prog.append(el("div", { className: "num" }, `${finished} / ${c.total} (${pct}%)`));
+  const bar = el("div", { className: "bar" }); bar.append(el("div", { style: `width:${pct}%` })); prog.append(bar);
+  prog.append(el("div", { className: "msg", style: "margin:4px 0 0" },
+    ["pending", "retry", "dialing", "in_call", "failed", "skipped"].filter(k => s[k]).map(k => `${k} ${s[k]}`).join(" · ")));
+  tr.append(prog);
+
+  const out = el("td"); const chips = el("div", { className: "chips" });
+  Object.entries(c.byOutcome || {}).sort((a, b) => b[1] - a[1]).forEach(([k, n]) =>
+    chips.append(el("span", { className: `chip ${GOOD.has(k) ? "good" : BAD.has(k) ? "bad" : ""}` }, `${k} ${n}`)));
+  out.append(chips); tr.append(out);
+
+  tr.append(el("td", { className: "num" }, `$${c.costUsd}`));
+
+  const act = el("td"); const box = el("div", { className: "actions" });
+  if (c.state !== "finished") {
+    const toggle = el("button", {}, c.status === "paused" ? "Resume" : "Pause");
+    toggle.onclick = async () => {
+      toggle.disabled = true;
+      try { await api(`/sgsp/campaigns/${c.id}/${c.status === "paused" ? "resume" : "pause"}`, { method: "POST" }); }
+      catch (e) { alert(e.message); }
+      refresh();
+    };
+    box.append(toggle);
+  }
+  const report = el("button", {}, "Report CSV");
+  report.onclick = async () => {
+    try {
+      const blob = await (await api(`/sgsp/campaigns/${c.id}/report.csv`)).blob();
+      const a = el("a", { href: URL.createObjectURL(blob), download: `sgsp_campaign_${c.id}.csv` });
+      document.body.append(a); a.click(); a.remove();
+    } catch (e) { alert(e.message); }
+  };
+  box.append(report); act.append(box); tr.append(act);
+  return tr;
+}
+
+async function refresh() {
+  const rows = document.getElementById("rows"), live = document.getElementById("live");
+  try {
+    const data = await (await api("/sgsp/campaigns")).json();
+    live.className = "msg"; live.style.margin = "0";
+    live.textContent = `Live calls ${data.active_calls} / ${data.channel_limit} · calling hours ${data.calling_hours_open ? "open" : "closed"}`;
+    rows.replaceChildren(...(data.campaigns.length ? data.campaigns.map(renderRow)
+      : [Object.assign(el("tr"), { innerHTML: '<td colspan="7" class="msg">No campaigns yet.</td>' })]));
+  } catch (e) {
+    live.className = "msg error"; live.textContent = e.message;
+  }
+}
+
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("uploadBtn"), msg = document.getElementById("uploadMsg");
+  const fd = new FormData();
+  fd.append("name", document.getElementById("campName").value);
+  fd.append("file", document.getElementById("campFile").files[0]);
+  fd.append("start_paused", document.getElementById("startPaused").checked);
+  btn.disabled = true; msg.className = "msg"; msg.textContent = "Uploading…";
+  try {
+    const r = await (await api("/sgsp/campaigns", { method: "POST", body: fd })).json();
+    msg.textContent = `Campaign #${r.campaign_id} created — ${r.accepted} employees` +
+      (r.rejected_count ? `, ${r.rejected_count} rows rejected (e.g. row ${r.rejected[0].row}: ${r.rejected[0].reason})` : "") + ".";
+    e.target.reset();
+    refresh();
+  } catch (err) {
+    msg.className = "msg error"; msg.textContent = `Upload failed: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
